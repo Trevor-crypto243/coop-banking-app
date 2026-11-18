@@ -24,7 +24,7 @@ public class Transaction {
 
     private String narration;
 
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime createdAt = LocalDateTime.now().withNano(0);
 
     public Transaction() {
     }

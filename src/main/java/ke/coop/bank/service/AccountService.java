@@ -36,6 +36,6 @@ public class AccountService {
         String formatted = String.format("%s %,.2f", account.getCurrency(), account.getBalance());
 
         return new BalanceResponse(account.getAccountNumber(), account.getCustomer().getFullName(),
-                account.getBalance(), account.getCurrency(), formatted, LocalDateTime.now());
+                account.getBalance(), account.getCurrency(), formatted, LocalDateTime.now().withNano(0));
     }
 }

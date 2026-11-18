@@ -1,13 +1,21 @@
 package ke.coop.bank.dto;
 
-import ke.coop.bank.model.Account;
-import ke.coop.bank.model.Customer;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
-public record CustomerResponse(Long customerId, String fullName, String email,String accountNumber, BigDecimal balance, String currency) {
-
-    public static CustomerResponse from(Customer customer, Account account) {
-        return new CustomerResponse(customer.getId(), customer.getFullName(), customer.getEmail(), account.getAccountNumber(), account.getBalance(), account.getCurrency());
-    }
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class CustomerResponse {
+    private Long customerId;
+    private String fullName;
+    private String email;
+    private String accountNumber;
+    private BigDecimal balance;
+    private String currency;
 }

@@ -1,15 +1,23 @@
 package ke.coop.bank.dto;
 
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
+@Data
+@NoArgsConstructor
+public class ApiResponse<T> {
 
-public record ApiResponse<T>(String status, String message, T data, LocalDateTime timestamp) {
+    private String status;
+    private String message;
+    private T data;
+    private LocalDateTime timestamp;
 
-    public static <T> ApiResponse<T> success(String message, T data) {
-        return new ApiResponse<>("SUCCESS", message, data, LocalDateTime.now().withNano(0));
-    }
-
-    public static <T> ApiResponse<T> failed(String message, T details) {
-        return new ApiResponse<>("FAILED", message, details, LocalDateTime.now().withNano(0));
+    public ApiResponse(String status, String message, T data) {
+        this.status = status;
+        this.message = message;
+        this.data = data;
+        this.timestamp = LocalDateTime.now().withNano(0);
     }
 }

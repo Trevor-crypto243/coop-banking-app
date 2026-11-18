@@ -1,0 +1,47 @@
+### create first customer
+POST http://localhost:8080/api/v1/customers
+Content-Type: application/json
+
+{
+  "firstName": "Jane",
+  "lastName": "Wanjiku",
+  "nationalId": "12345678",
+  "email": "jane@example.com",
+  "phoneNumber": "0712345678",
+  "openingBalance": 15000
+}
+
+### create second customer
+POST http://localhost:8080/api/v1/customers
+Content-Type: application/json
+
+{
+  "firstName": "Brian",
+  "lastName": "Otieno",
+  "nationalId": "23456789",
+  "email": "brian@example.com",
+  "phoneNumber": "+254722000111",
+  "openingBalance": 500
+}
+
+### transfer (replace the account numbers with the ones returned above)
+POST http://localhost:8080/api/v1/transfers
+Content-Type: application/json
+
+{
+  "fromAccount": "0149895421023",
+  "toAccount": "0194624317827",
+  "amount": 2500.50,
+  "narration": "Rent"
+}
+
+### check balance
+GET http://localhost:8080/api/v1/accounts/0149895421023/balance
+
+### validation error
+POST http://localhost:8080/api/v1/transfers
+Content-Type: application/json
+
+{
+  "amount": -3
+}

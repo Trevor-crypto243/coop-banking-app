@@ -5,28 +5,26 @@ import ke.coop.bank.dto.ApiResponse;
 import ke.coop.bank.dto.CustomerRequest;
 import ke.coop.bank.dto.CustomerResponse;
 import ke.coop.bank.service.CustomerService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/customers")
+@RequiredArgsConstructor
 public class CustomerController {
 
     private final CustomerService customerService;
 
-    public CustomerController(CustomerService customerService) {
-        this.customerService = customerService;
-    }
-
     //customer controller
     @PostMapping
     public ResponseEntity<ApiResponse<CustomerResponse>> createCustomer(@Valid @RequestBody CustomerRequest request) {
+        log.info("POST /api/v1/customers");
         CustomerResponse customer = customerService.createCustomer(request);
-        String message = "Welcome " + request.firstName() + "! Your account " + customer.accountNumber() + " is ready.";
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(message, customer));
+        String message = "Welcome " + request.getFirstName() + "! Your account " + customer.getAccountNumber() + " is ready.";
+        return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>("SUCCESS", message, customer));
     }
 }

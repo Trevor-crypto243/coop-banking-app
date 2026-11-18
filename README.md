@@ -10,7 +10,11 @@ Spring Boot API for creating customers, transferring funds and checking balances
 
 Runs on `http://localhost:8080`. Swagger: http://localhost:8080/swagger-ui.html
 
+![Swagger](screenshots/swagger.png)
+
 Tests: `./mvnw test`
+
+![Tests](screenshots/tests.png)
 
 ## APIs
 

@@ -1,44 +1,21 @@
 # Co-op Banking App
 
-A simple Spring Boot banking API with 3 endpoints:
+Spring Boot API for creating customers, transferring funds and checking balances.
 
-- Create a customer (saves the customer details and opens an account)
-- Transfer funds from one account to another
-- Check an account balance
-
-## Tech
-
-Java 21, Spring Boot 3, Spring Data JPA, H2, Lombok, Swagger
-
-## How to run it
+## Run
 
 ```bash
-git clone https://github.com/Trevor-crypto243/coop-banking-app.git
-cd coop-banking-app
 ./mvnw spring-boot:run
 ```
 
-The app will starts on `http://localhost:8080`.
+Runs on `http://localhost:8080`. Swagger: http://localhost:8080/swagger-ui.html
 
-- Swagger UI: http://localhost:8080/swagger-ui.html
-- API docs (json): http://localhost:8080/api-docs
-- H2 console: http://localhost:8080/h2-console (JDBC URL `jdbc:h2:file:./data/bankdb`, user `sa`, no password)
+Tests: `./mvnw test`
 
-Testing:
+## APIs
 
-```bash
-./mvnw test
-```
-
-## Endpoints
-
-| Method | URL | Description |
-|---|---|---|
-| POST | `/api/v1/customers` | create customer + account |
-| POST | `/api/v1/transfers` | transfer funds |
-| GET | `/api/v1/accounts/{accountNumber}/balance` | get account balance |
-
-### Create customer
+### 1. Create customer
+`POST /api/v1/customers`
 
 ```json
 {
@@ -51,7 +28,16 @@ Testing:
 }
 ```
 
-### Transfer
+- all fields required except phone number
+- national ID: 7 or 8 digits, must be unique
+- email must be unique
+- phone: Kenyan format (07.., 01.. or +254..)
+- opening balance can't be negative
+
+Returns `201` with the new account number.
+
+### 2. Transfer funds
+`POST /api/v1/transfers`
 
 ```json
 {
@@ -62,7 +48,19 @@ Testing:
 }
 ```
 
-### Balance response
+- both accounts must exist and be different
+- minimum amount is 1
+- sender must have enough balance
+- narration is optional
+
+Returns `200` with the transaction reference and both new balances.
+
+### 3. Balance enquiry
+`GET /api/v1/accounts/{accountNumber}/balance`
+
+- account number must be 13 digits
+
+Returns `200`:
 
 ```json
 {
@@ -80,12 +78,11 @@ Testing:
 }
 ```
 
-Errors come back in the same format with `"status": "FAILED"` and a message (400 for validation errors, 404 if the account doesn't exist, 422 for insufficient funds).
+## Errors
 
-There's also a `requests.http` file with sample requests.
-
-## TODO
-
-- Add authentication
-- Lock the accounts during a transfer to handle concurrent transfers
-- Use PostgreSQL instead of H2
+| Status | When |
+|---|---|
+| 400 | validation error, bad json, same account, duplicate customer |
+| 404 | account not found |
+| 422 | insufficient funds |
+| 500 | unexpected error |

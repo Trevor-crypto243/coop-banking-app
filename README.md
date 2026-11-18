@@ -1,125 +1,215 @@
-# Banking App (Spring Boot + Angular)
+# Co-op Banking App
 
-A small core-banking app: staff sign in, open accounts, deposit, withdraw, transfer between accounts and view transaction history.
+A small Spring Boot service with three APIs:
 
-- **Backend:** Java 21, Spring Boot 3.3, Spring Security (stateless JWT, BCrypt), Spring Data JPA, Bean Validation, H2 (dev) / PostgreSQL, OpenAPI/Swagger.
-- **Frontend:** Angular 21 (standalone components, signals, OnPush, zoneless), reactive forms, functional HTTP interceptor and route guards, lazy-loaded routes.
+1. **Onboard a customer** – takes the customer's details, saves them and opens an account for them.
+2. **Funds transfer** – moves money from one customer's account to another and updates both balances.
+3. **Balance enquiry** – returns a customer's current balance in a friendly format.
 
-## Run it
+All requests and responses are JSON. Inputs are validated, every request is logged with a request id, and errors always come back in the same shape.
 
-### Option 1: local dev (no Docker, in-memory H2)
+## Tech stack
+
+- Java 21
+- Spring Boot 3.3 (Web, Data JPA, Validation)
+- H2 database (file based, so data survives a restart)
+- JUnit 5 + MockMvc for tests
+
+## Running it
+
+You only need Java 21. The Maven wrapper is included.
 
 ```bash
-# terminal 1: API on :8080
-cd backend
+git clone https://github.com/Trevor-crypto243/coop-banking-app.git
+cd coop-banking-app
 ./mvnw spring-boot:run
-
-# terminal 2: UI on :4200 (proxies /api to :8080)
-cd frontend
-npm install
-npm start
 ```
 
-Open http://localhost:4200 and sign in with **admin / Admin@123**.
+The app starts on `http://localhost:8080`.
 
-- Swagger UI: http://localhost:8080/swagger-ui.html
-- H2 console: http://localhost:8080/h2-console (JDBC URL `jdbc:h2:mem:bank`, user `sa`, no password)
-
-### Option 2: everything in Docker (PostgreSQL)
+Run the tests with:
 
 ```bash
-docker compose up -d --build
+./mvnw test
 ```
 
-UI at http://localhost:4200, API at http://localhost:8080. Data persists in the `pgdata` volume.
+To look at the database, open `http://localhost:8080/h2-console` and use JDBC URL `jdbc:h2:file:./data/bankdb`, user `sa`, no password.
 
-### Tests
+## Project structure
 
-```bash
-cd backend && ./mvnw test        # 10 tests: service rules, rollback, concurrency, API + security
-cd frontend && npx ng build      # production build (type-checks templates)
+```
+src/main/java/ke/coop/bank
+├── BankApplication.java
+├── config/        RequestLoggingFilter – adds a request id to every log line
+├── controller/    REST endpoints, kept thin
+├── service/       business logic (onboarding, transfer, balance)
+├── repository/    Spring Data JPA repositories
+├── model/         JPA entities: Customer, Account, Transaction
+├── dto/           request / response records + the ApiResponse wrapper
+└── exception/     custom exceptions + GlobalExceptionHandler
 ```
 
 ## API
 
-All `/api/v1/**` endpoints need `Authorization: Bearer <token>`.
-
-| Method | Path | Body | Success | Errors |
-|---|---|---|---|---|
-| POST | `/api/auth/login` | `{username, password}` | 200 `{token, username, role, expiresInSeconds}` | 400, 401 |
-| GET | `/api/auth/me` | | 200 | 401 |
-| GET | `/api/v1/accounts?page=0&size=20` | | 200 page of accounts | 401 |
-| GET | `/api/v1/accounts/{id}` | | 200 | 404 |
-| POST | `/api/v1/accounts` | `{holderName, openingBalance?}` | 201 + `Location` | 400 |
-| POST | `/api/v1/accounts/{id}/deposit` | `{amount, narration?}` | 200 updated account | 400, 404 |
-| POST | `/api/v1/accounts/{id}/withdraw` | `{amount, narration?}` | 200 updated account | 400, 404, 422 insufficient funds |
-| GET | `/api/v1/accounts/{id}/transactions?page=0&size=10` | | 200 page, newest first | 404 |
-| POST | `/api/v1/transfers` | `{fromAccountId, toAccountId, amount, narration?}` | 200 `{reference, from, to}` | 400, 404, 422 |
-
-Errors are RFC 7807 `ProblemDetail` JSON, e.g.
+Every response uses the same envelope:
 
 ```json
-{"title":"Unprocessable Entity","status":422,"detail":"Insufficient funds in account 0182727621009"}
+{
+  "status": "SUCCESS | FAILED",
+  "message": "human readable message",
+  "data": { },
+  "timestamp": "2026-11-18T11:24:22"
+}
 ```
 
-Validation errors add an `errors` map: `{"errors": {"amount": "must be greater than 0"}}`.
+### 1. Create customer
 
-Quick check with curl:
+`POST /api/v1/customers`
+
+```json
+{
+  "firstName": "Jane",
+  "lastName": "Wanjiku",
+  "nationalId": "12345678",
+  "email": "jane@example.com",
+  "phoneNumber": "0712345678",
+  "openingBalance": 15000
+}
+```
+
+Response `201 Created`:
+
+```json
+{
+  "status": "SUCCESS",
+  "message": "Welcome Jane! Your account 0149895421023 is ready.",
+  "data": {
+    "customerId": 1,
+    "fullName": "Jane Wanjiku",
+    "email": "jane@example.com",
+    "accountNumber": "0149895421023",
+    "balance": 15000,
+    "currency": "KES"
+  },
+  "timestamp": "2026-11-18T11:24:21"
+}
+```
+
+Validation rules: names and email are required, national ID is 7–8 digits, phone must be a Kenyan number (`07..`, `01..` or `+254..`), opening balance can't be negative. National ID and email must be unique.
+
+### 2. Transfer funds
+
+`POST /api/v1/transfers`
+
+```json
+{
+  "fromAccount": "0149895421023",
+  "toAccount": "0194624317827",
+  "amount": 2500.50,
+  "narration": "Rent"
+}
+```
+
+Response `200 OK`:
+
+```json
+{
+  "status": "SUCCESS",
+  "message": "KES 2,500.50 sent to 0194624317827. Ref: FT26111811240A004A",
+  "data": {
+    "reference": "FT26111811240A004A",
+    "fromAccount": "0149895421023",
+    "toAccount": "0194624317827",
+    "amount": 2500.50,
+    "fromAccountBalance": 12499.50,
+    "toAccountBalance": 3000.50,
+    "transactionDate": "2026-11-18T11:24:22"
+  },
+  "timestamp": "2026-11-18T11:24:22"
+}
+```
+
+How the transfer works:
+
+- The debit, the credit and the transaction record all run in **one database transaction**. If any step fails, the whole thing rolls back and no money is lost or created.
+- Both account rows are locked (`SELECT ... FOR UPDATE`) before the balances are read. Two transfers on the same account can't both read the old balance and overdraw it.
+- The accounts are always locked in the same order (smaller account number first). That way a transfer A → B and a transfer B → A running at the same time can't deadlock.
+- Each transfer gets a reference like `FT2611181124XXXXXX` and is saved in the `transactions` table.
+
+### 3. Balance enquiry
+
+`GET /api/v1/accounts/{accountNumber}/balance`
+
+Response `200 OK`:
+
+```json
+{
+  "status": "SUCCESS",
+  "message": "Dear Jane Wanjiku, your account balance is KES 12,499.50",
+  "data": {
+    "accountNumber": "0149895421023",
+    "accountName": "Jane Wanjiku",
+    "balance": 12499.50,
+    "currency": "KES",
+    "formattedBalance": "KES 12,499.50",
+    "asAt": "2026-11-18T11:24:22"
+  },
+  "timestamp": "2026-11-18T11:24:22"
+}
+```
+
+## Error handling
+
+| Case | HTTP status | Example message |
+|---|---|---|
+| Missing / invalid fields | 400 | `Validation failed` (field errors listed in `data`) |
+| Body isn't valid JSON | 400 | `Request body is missing or is not valid JSON` |
+| Same source and destination | 400 | `Source and destination account cannot be the same` |
+| Duplicate national ID / email | 400 | `A customer with this national ID already exists` |
+| Account doesn't exist | 404 | `Account 0100000000000 does not exist` |
+| Not enough money | 422 | `Insufficient funds in account ... Available: 3,000.50, requested: 999,999.00` |
+| Anything unexpected | 500 | generic message, the stack trace is only logged |
+
+Validation error example:
+
+```json
+{
+  "status": "FAILED",
+  "message": "Validation failed",
+  "data": {
+    "fromAccount": "source account is required",
+    "toAccount": "destination account is required",
+    "amount": "minimum transfer amount is KES 1.00"
+  },
+  "timestamp": "2026-11-18T11:24:22"
+}
+```
+
+## Logging
+
+Each request gets a short id. The id goes into every log line for that request and into the `X-Request-Id` response header, so a single call can be followed through the logs:
+
+```
+11:24:21.451 INFO  [4ef487f4] k.c.b.s.CustomerService - Onboarding new customer, nationalId=****678
+11:24:21.612 INFO  [4ef487f4] k.c.b.s.CustomerService - Customer 1 created with account 0149895421023
+11:24:21.640 INFO  [4ef487f4] k.c.b.c.RequestLoggingFilter - POST /api/v1/customers -> 201 (198 ms)
+```
+
+National IDs are masked in the logs.
+
+## Trying it out
+
+`requests.http` has ready-made requests. It runs straight from IntelliJ or the VS Code REST Client extension. With curl:
 
 ```bash
-TOKEN=$(curl -s -X POST localhost:8080/api/auth/login -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"Admin@123"}' | sed -E 's/.*"token":"([^"]+)".*/\1/')
-curl -s localhost:8080/api/v1/accounts -H "Authorization: Bearer $TOKEN"
-curl -s -X POST localhost:8080/api/v1/transfers -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' -d '{"fromAccountId":1,"toAccountId":2,"amount":500}'
+curl -X POST localhost:8080/api/v1/customers \
+  -H "Content-Type: application/json" \
+  -d '{"firstName":"Jane","lastName":"Wanjiku","nationalId":"12345678","email":"jane@example.com","phoneNumber":"0712345678","openingBalance":15000}'
 ```
 
-## Design decisions
+## What I'd add next
 
-**Money and ACID**
-- Amounts are `BigDecimal` with `NUMERIC(19,2)`, never `double`.
-- `transfer()` is one `@Transactional` method: debit, credit and both ledger rows commit together or not at all. Any exception (e.g. insufficient funds) rolls everything back; a test proves it.
-- Rows are locked with `SELECT ... FOR UPDATE` (`PESSIMISTIC_WRITE`) **in ascending id order**, so A→B and B→A running at the same time cannot deadlock. A test fires 100 concurrent opposite transfers and checks the total is unchanged.
-- `@Version` on `Account` adds optimistic locking as a second guard; a conflict returns 409.
-- Every movement writes a `Transaction` row with `balanceAfter`; both legs of a transfer share one `reference`.
-
-**Security**
-- Passwords hashed with BCrypt. Login returns the same message for unknown user and wrong password (no username enumeration).
-- Stateless JWT (HS384, issuer checked, 60-minute expiry). The secret comes from `APP_JWT_SECRET`; startup fails if it is shorter than 32 characters.
-- CSRF disabled because no cookies are used; CORS limited to the configured origins.
-- The UI stores the token in `sessionStorage` (cleared when the tab closes); the interceptor logs out on any 401.
-
-**Structure (SOLID)**
-- Controller (HTTP) → Service (business rules, transactions) → Repository (data). Entities never leave the service layer; records are used as DTOs.
-- Constructor injection everywhere. One `@RestControllerAdvice` maps exceptions to status codes.
-
-**Performance**
-- `open-in-view: false`, read-only transactions for queries, lazy `ManyToOne`, JDBC batching, composite index on `(account_id, createdAt)` for history, a unique index on `accountNumber`, server-side pagination with a max page size of 100, gzip compression.
-- Angular: lazy routes (login page loads ~1 kB of its own code), OnPush + signals, `@for` with `track`, nginx caches hashed bundles for a year and never caches `index.html`.
-
-## Project layout
-
-```
-backend/src/main/java/ke/coop/bank/
-  config/       SecurityConfig, DataSeeder
-  domain/       Account, Transaction, AppUser (JPA entities)
-  repository/   Spring Data repositories (incl. FOR UPDATE lookup)
-  security/     JwtService, JwtAuthFilter, JwtProperties
-  service/      AccountService, AuthService, domain exceptions
-  web/          AccountController, AuthController, GlobalExceptionHandler, dto/
-frontend/src/app/
-  core/         AuthService, authInterceptor, guards, BankApiService, models
-  pages/        login, accounts (list), open-account, transfer, account-detail (deposit/withdraw + history)
-  app.*         shell: top bar + sidebar with collapsible submenus (Accounts > All / Open, Payments > Transfer);
-                becomes a hamburger drawer under 800px
-```
-
-## Configuration
-
-| Env var | Default | Purpose |
-|---|---|---|
-| `APP_JWT_SECRET` | dev-only value | JWT signing key (32+ chars) |
-| `APP_ADMIN_PASSWORD` | `Admin@123` | Seeded admin password |
-| `APP_CORS_ORIGINS` | `http://localhost:4200` | Comma-separated allowed origins |
-| `SPRING_PROFILES_ACTIVE` | (none = H2) | `postgres` to use PostgreSQL |
-| `DB_URL`, `DB_USER`, `DB_PASSWORD` | `localhost:5432/bank`, `bank`, `bank` | PostgreSQL connection |
+- Authentication (JWT / OAuth2), so customers can only see their own accounts
+- An idempotency key on transfers, so a retried request isn't processed twice
+- Swap H2 for PostgreSQL and manage the schema with Flyway
+- Transaction history endpoint

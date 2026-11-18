@@ -1,13 +1,17 @@
 package ke.coop.bank.model;
 
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Table(name = "customers")
+@Getter
+@Setter
+@NoArgsConstructor
 public class Customer {
 
     @Id
@@ -25,37 +29,9 @@ public class Customer {
 
     private String phoneNumber;
 
-    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL)
-    private List<Account> accounts = new ArrayList<>();
-
-    private LocalDateTime createdAt = LocalDateTime.now();
-
-    public Customer() {
-    }
-
-    public Customer(String firstName, String lastName, String nationalId, String email, String phoneNumber) {
-        this.firstName = firstName;
-        this.lastName = lastName;
-        this.nationalId = nationalId;
-        this.email = email;
-        this.phoneNumber = phoneNumber;
-    }
+    private LocalDateTime createdAt;
 
     public String getFullName() {
         return firstName + " " + lastName;
     }
-
-    public void addAccount(Account account) {
-        accounts.add(account);
-        account.setCustomer(this);
-    }
-
-    public Long getId() { return id; }
-    public String getFirstName() { return firstName; }
-    public String getLastName() { return lastName; }
-    public String getNationalId() { return nationalId; }
-    public String getEmail() { return email; }
-    public String getPhoneNumber() { return phoneNumber; }
-    public List<Account> getAccounts() { return accounts; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
 }

@@ -7,62 +7,70 @@ import ke.coop.bank.model.Account;
 import ke.coop.bank.model.Customer;
 import ke.coop.bank.repository.AccountRepository;
 import ke.coop.bank.repository.CustomerRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.concurrent.ThreadLocalRandom;
+import java.time.LocalDateTime;
+import java.util.Random;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class CustomerService {
-
-    private static final Logger log = LoggerFactory.getLogger(CustomerService.class);
 
     private final CustomerRepository customerRepository;
     private final AccountRepository accountRepository;
 
-    public CustomerService(CustomerRepository customerRepository, AccountRepository accountRepository) {
-        this.customerRepository = customerRepository;
-        this.accountRepository = accountRepository;
-    }
-
     @Transactional
     public CustomerResponse createCustomer(CustomerRequest request) {
-        log.info("Onboarding new customer, nationalId={}", mask(request.nationalId()));
+        log.info("Creating customer {} {}", request.getFirstName(), request.getLastName());
 
-        if (customerRepository.existsByNationalId(request.nationalId())) {
+        if (customerRepository.existsByNationalId(request.getNationalId())) {
             throw new BadRequestException("A customer with this national ID already exists");
         }
-        if (customerRepository.existsByEmail(request.email().toLowerCase())) {
+        if (customerRepository.existsByEmail(request.getEmail().toLowerCase())) {
             throw new BadRequestException("A customer with this email already exists");
         }
 
-        Customer customer = new Customer(
-                request.firstName().trim(),
-                request.lastName().trim(),
-                request.nationalId(),
-                request.email().toLowerCase(),
-                request.phoneNumber());
+        Customer customer = new Customer();
+        customer.setFirstName(request.getFirstName().trim());
+        customer.setLastName(request.getLastName().trim());
+        customer.setNationalId(request.getNationalId());
+        customer.setEmail(request.getEmail().toLowerCase());
+        customer.setPhoneNumber(request.getPhoneNumber());
+        customer.setCreatedAt(LocalDateTime.now());
+        customer = customerRepository.save(customer);
 
-        Account account = new Account(generateAccountNumber(), request.openingBalance());
-        customer.addAccount(account);
-        customerRepository.save(customer);
+        //open an account for the customer with the opening balance
+        Account account = new Account();
+        account.setAccountNumber(generateAccountNumber());
+        account.setBalance(request.getOpeningBalance());
+        account.setCustomer(customer);
+        account.setCreatedAt(LocalDateTime.now());
+        account.setUpdatedAt(LocalDateTime.now());
+        account = accountRepository.save(account);
 
-        log.info("Customer {} created with account {}", customer.getId(), account.getAccountNumber());
-        return CustomerResponse.from(customer, account);
+        log.info("Customer saved with id {} and account number {}", customer.getId(), account.getAccountNumber());
+
+        return CustomerResponse.builder()
+                .customerId(customer.getId())
+                .fullName(customer.getFullName())
+                .email(customer.getEmail())
+                .accountNumber(account.getAccountNumber())
+                .balance(account.getBalance())
+                .currency(account.getCurrency())
+                .build();
     }
 
-    // Co-op style 13 digit account number: 01 + 11 random digits
+    //account numbers are 13 digits and start with 01
     private String generateAccountNumber() {
-        String number;
-        do {
-            number = "01" + ThreadLocalRandom.current().nextLong(10_000_000_000L, 99_999_999_999L);
-        } while (accountRepository.existsByAccountNumber(number));
-        return number;
-    }
-
-    private String mask(String value) {
-        return "****" + value.substring(value.length() - 3);
+        Random random = new Random();
+        String accountNumber = "01" + String.format("%011d", random.nextLong(100000000000L));
+        while (accountRepository.existsByAccountNumber(accountNumber)) {
+            accountNumber = "01" + String.format("%011d", random.nextLong(100000000000L));
+        }
+        return accountNumber;
     }
 }

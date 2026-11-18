@@ -4,78 +4,85 @@ import ke.coop.bank.dto.TransferRequest;
 import ke.coop.bank.dto.TransferResponse;
 import ke.coop.bank.exception.AccountNotFoundException;
 import ke.coop.bank.exception.BadRequestException;
+import ke.coop.bank.exception.InsufficientFundsException;
 import ke.coop.bank.model.Account;
 import ke.coop.bank.model.Transaction;
 import ke.coop.bank.repository.AccountRepository;
 import ke.coop.bank.repository.TransactionRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class TransferService {
-
-    private static final Logger log = LoggerFactory.getLogger(TransferService.class);
 
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
 
-    public TransferService(AccountRepository accountRepository, TransactionRepository transactionRepository) {
-        this.accountRepository = accountRepository;
-        this.transactionRepository = transactionRepository;
-    }
-
-    /*
-     * Debit, credit and the transaction record all happen in one db transaction,
-     * so if anything fails half way nothing is saved.
-     */
+    //@Transactional so that if anything fails the debit and credit are both rolled back
     @Transactional
     public TransferResponse transfer(TransferRequest request) {
-        String from = request.fromAccount().trim();
-        String to = request.toAccount().trim();
-        log.info("Transfer request: {} -> {}, amount {}", from, to, request.amount());
+        log.info("Transfer of {} from {} to {}", request.getAmount(), request.getFromAccount(), request.getToAccount());
 
-        if (from.equals(to)) {
+        if (request.getFromAccount().equals(request.getToAccount())) {
             throw new BadRequestException("Source and destination account cannot be the same");
         }
 
-        // always lock the smaller account number first, otherwise A->B and B->A
-        // running at the same time can deadlock each other
-        Account first = lock(from.compareTo(to) < 0 ? from : to);
-        Account second = lock(from.compareTo(to) < 0 ? to : from);
-        Account source = first.getAccountNumber().equals(from) ? first : second;
-        Account destination = source == first ? second : first;
+        Account fromAccount = accountRepository.findByAccountNumber(request.getFromAccount())
+                .orElseThrow(() -> new AccountNotFoundException("Account " + request.getFromAccount() + " does not exist"));
+        Account toAccount = accountRepository.findByAccountNumber(request.getToAccount())
+                .orElseThrow(() -> new AccountNotFoundException("Account " + request.getToAccount() + " does not exist"));
 
-        source.debit(request.amount());
-        destination.credit(request.amount());
+        BigDecimal amount = request.getAmount();
 
-        String narration = request.narration() == null || request.narration().isBlank()
-                ? "Funds transfer to " + destination.getCustomer().getFullName()
-                : request.narration();
+        if (fromAccount.getBalance().compareTo(amount) < 0) {
+            throw new InsufficientFundsException("Insufficient funds in account " + fromAccount.getAccountNumber() + ". Available balance is KES " + fromAccount.getBalance());
+        }
 
-        Transaction txn = transactionRepository.save(
-                new Transaction(newReference(), from, to, request.amount(), narration));
+        //debit sender, credit receiver
+        fromAccount.setBalance(fromAccount.getBalance().subtract(amount));
+        fromAccount.setUpdatedAt(LocalDateTime.now());
+        toAccount.setBalance(toAccount.getBalance().add(amount));
+        toAccount.setUpdatedAt(LocalDateTime.now());
 
-        log.info("Transfer {} successful. {} balance: {}, {} balance: {}", txn.getReference(),
-                from, source.getBalance(), to, destination.getBalance());
+        accountRepository.save(fromAccount);
+        accountRepository.save(toAccount);
 
-        return new TransferResponse(txn.getReference(), from, to, txn.getAmount(),
-                source.getBalance(), destination.getBalance(), txn.getCreatedAt());
+        Transaction transaction = new Transaction();
+        transaction.setReference(generateReference());
+        transaction.setSourceAccount(fromAccount.getAccountNumber());
+        transaction.setDestinationAccount(toAccount.getAccountNumber());
+        transaction.setAmount(amount);
+        if (request.getNarration() != null && !request.getNarration().isBlank()) {
+            transaction.setNarration(request.getNarration());
+        } else {
+            transaction.setNarration("Funds transfer to " + toAccount.getCustomer().getFullName());
+        }
+        transaction.setStatus("SUCCESS");
+        transaction.setCreatedAt(LocalDateTime.now().withNano(0));
+        transactionRepository.save(transaction);
+
+        log.info("Transfer successful, ref {}. New balances: {} = {}, {} = {}", transaction.getReference(), fromAccount.getAccountNumber(), fromAccount.getBalance(), toAccount.getAccountNumber(), toAccount.getBalance());
+
+        return TransferResponse.builder()
+                .reference(transaction.getReference())
+                .fromAccount(fromAccount.getAccountNumber())
+                .toAccount(toAccount.getAccountNumber())
+                .amount(amount)
+                .fromAccountBalance(fromAccount.getBalance())
+                .toAccountBalance(toAccount.getBalance())
+                .transactionDate(transaction.getCreatedAt())
+                .build();
     }
 
-    private Account lock(String accountNumber) {
-        return accountRepository.findForUpdate(accountNumber)
-                .orElseThrow(() -> new AccountNotFoundException(accountNumber));
-    }
-
-    // e.g FT2611181430A1B2C3
-    private String newReference() {
-        String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyMMddHHmm"));
-        return "FT" + time + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+    private String generateReference() {
+        return "FT" + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
     }
 }

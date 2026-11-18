@@ -78,6 +78,20 @@ Returns `200`:
 }
 ```
 
+## Postman screenshots
+
+**Create customer**
+
+![Create customer](screenshots/create-customer.png)
+
+**Transfer**
+
+![Transfer](screenshots/transfer.png)
+
+**Balance enquiry**
+
+![Balance](screenshots/balance.png)
+
 ## Errors
 
 | Status | When |

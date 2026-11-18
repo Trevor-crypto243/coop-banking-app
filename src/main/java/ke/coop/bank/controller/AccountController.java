@@ -19,6 +19,7 @@ public class AccountController {
         this.accountService = accountService;
     }
 
+    //Accounts controller
     @GetMapping("/{accountNumber}/balance")
     public ResponseEntity<ApiResponse<BalanceResponse>> getBalance(@PathVariable String accountNumber) {
         BalanceResponse balance = accountService.getBalance(accountNumber);

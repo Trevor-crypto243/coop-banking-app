@@ -22,6 +22,7 @@ public class CustomerController {
         this.customerService = customerService;
     }
 
+    //customer controller
     @PostMapping
     public ResponseEntity<ApiResponse<CustomerResponse>> createCustomer(@Valid @RequestBody CustomerRequest request) {
         CustomerResponse customer = customerService.createCustomer(request);

@@ -21,11 +21,11 @@ public class TransferController {
         this.transferService = transferService;
     }
 
+    //Transfer controller
     @PostMapping
     public ResponseEntity<ApiResponse<TransferResponse>> transfer(@Valid @RequestBody TransferRequest request) {
         TransferResponse result = transferService.transfer(request);
-        String message = String.format("KES %,.2f sent to %s. Ref: %s",
-                result.amount(), result.toAccount(), result.reference());
+        String message = String.format("KES %,.2f sent to %s. Ref: %s",result.amount(), result.toAccount(), result.reference());
         return ResponseEntity.ok(ApiResponse.success(message, result));
     }
 }

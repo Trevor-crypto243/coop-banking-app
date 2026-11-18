@@ -61,15 +61,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleWrongMethod(HttpRequestMethodNotSupportedException ex) {
-        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
-                .body(ApiResponse.failed(ex.getMethod() + " is not supported on this endpoint", null));
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(ApiResponse.failed(ex.getMethod() + " is not supported on this endpoint", null));
     }
 
-    // anything we didn't see coming - log the full trace but don't leak it to the client
+   //any other exception caught
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex) {
         log.error("Unexpected error", ex);
-        return ResponseEntity.internalServerError()
-                .body(ApiResponse.failed("Something went wrong on our side, please try again later", null));
+        return ResponseEntity.internalServerError().body(ApiResponse.failed("Something went wrong on our side, please try again later", null));
     }
 }

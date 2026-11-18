@@ -8,16 +8,9 @@ A small Spring Boot service with three APIs:
 
 All requests and responses are JSON. Inputs are validated, every request is logged with a request id, and errors always come back in the same shape.
 
-## Tech stack
 
-- Java 21
-- Spring Boot 3.3 (Web, Data JPA, Validation)
-- H2 database (file based, so data survives a restart)
-- JUnit 5 + MockMvc for tests
+## How to run it
 
-## Running it
-
-You only need Java 21. The Maven wrapper is included.
 
 ```bash
 git clone https://github.com/Trevor-crypto243/coop-banking-app.git
@@ -25,15 +18,15 @@ cd coop-banking-app
 ./mvnw spring-boot:run
 ```
 
-The app starts on `http://localhost:8080`.
+The app will starts `http://localhost:8080`.
 
-Run the tests with:
+Testing:
 
 ```bash
 ./mvnw test
 ```
 
-To look at the database, open `http://localhost:8080/h2-console` and use JDBC URL `jdbc:h2:file:./data/bankdb`, user `sa`, no password.
+JDBC URL `jdbc:h2:file:./data/bankdb`, user `sa`, no password.
 
 ## Project structure
 
